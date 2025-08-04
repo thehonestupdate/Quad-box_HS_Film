@@ -42,7 +42,9 @@
         android:layout_height="match_parent"
         android:keepScreenOn="true"
         android:visibility="gone"
-        app:use_controller="false" />
+        app:use_controller="false"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
 
     <TextView
         android:id="@+id/speedIndicator"

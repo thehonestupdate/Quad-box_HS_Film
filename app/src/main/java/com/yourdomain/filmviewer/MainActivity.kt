@@ -16,7 +16,9 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackParameters
 import com.google.android.exoplayer2.Player
+import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.ui.PlayerView
+import com.google.android.exoplayer2.upstream.DefaultDataSource
 
 class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
@@ -32,46 +34,24 @@ class MainActivity : AppCompatActivity() {
 
     private var keyDownTimes = mutableMapOf<Int, Long>()
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var ffRunnable: Runnable
+    private var ffRunnable: Runnable? = null
     private var ffSkipMs = 5000L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // UI refs
         linkEntry = findViewById(R.id.linkEntry)
         linkBox = findViewById(R.id.linkBox)
         startBtn = findViewById(R.id.startBtn)
         playerView = findViewById(R.id.player_view)
         speedIndicator = findViewById(R.id.speedIndicator)
 
-        // Initialize ExoPlayer with default buffering
+        // Build ExoPlayer
         player = ExoPlayer.Builder(this).build().also { playerView.player = it }
 
-        // Handle shareable ?q= links
-        intent.data?.getQueryParameter("q")?.let { code ->
-            val decoded = String(android.util.Base64.decode(code, android.util.Base64.DEFAULT))
-            val links = decoded.lines().filter { it.isNotBlank() }
-            if (links.isNotEmpty()) {
-                videoQueue = links.toMutableList()
-                startPlayback()
-            }
-        }
-
-        startBtn.setOnClickListener {
-            val q = linkBox.text.toString().trim().substringAfter("?q=", "")
-            try {
-                val decoded = String(android.util.Base64.decode(q, android.util.Base64.DEFAULT))
-                val links = decoded.lines().filter { it.isNotBlank() }
-                if (links.isNotEmpty()) {
-                    videoQueue = links.toMutableList()
-                    startPlayback()
-                } else toast("No links in queue")
-            } catch (e: Exception) {
-                toast("Invalid link format")
-            }
-        }
-
+        // Listen for completion to auto‑advance
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED && currentIndex < videoQueue.size - 1) {
@@ -79,6 +59,30 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+
+        // Handle deep‑link launch
+        intent.data?.getQueryParameter("q")?.let { parseQueueAndStart(it) }
+
+        // Manual start
+        startBtn.setOnClickListener {
+            val base64 = linkBox.text.toString().substringAfter("?q=", "")
+            parseQueueAndStart(base64)
+        }
+    }
+
+    private fun parseQueueAndStart(base64: String) {
+        try {
+            val decoded = String(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
+            val links = decoded.lines().filter { it.isNotBlank() }
+            if (links.isEmpty()) {
+                toast("Queue is empty")
+                return
+            }
+            videoQueue = links.toMutableList()
+            startPlayback()
+        } catch (e: Exception) {
+            toast("Bad share link")
+        }
     }
 
     private fun startPlayback() {
@@ -92,7 +96,13 @@ class MainActivity : AppCompatActivity() {
     private fun playVideo(index: Int) {
         currentIndex = index
         val uri = Uri.parse(videoQueue[index])
-        player.setMediaItem(MediaItem.fromUri(uri))
+
+        // Use Progressive source so seek map is created once moov atom is at head (faststart)
+        val dataSourceFactory = DefaultDataSource.Factory(this)
+        val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(uri))
+
+        player.setMediaSource(mediaSource)
         player.prepare()
         player.playWhenReady = true
         player.playbackParameters = PlaybackParameters(playbackSpeed)
@@ -102,22 +112,19 @@ class MainActivity : AppCompatActivity() {
         if (playbackSpeed != 1.0f) {
             speedIndicator.text = String.format("%.2fx", playbackSpeed)
             speedIndicator.visibility = View.VISIBLE
-        } else speedIndicator.visibility = View.GONE
+        } else {
+            speedIndicator.visibility = View.GONE
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (!keyDownTimes.containsKey(keyCode)) keyDownTimes[keyCode] = SystemClock.elapsedRealtime()
+
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (event.repeatCount == 0) {
                     player.seekTo(player.currentPosition + 5000L)
-                    ffSkipMs = 5000L
-                    ffRunnable = Runnable {
-                        player.seekTo(player.currentPosition + ffSkipMs)
-                        ffSkipMs += 5000L
-                        handler.postDelayed(ffRunnable, 300)
-                    }
-                    handler.postDelayed(ffRunnable, 700)
+                    startFastForwardRamp()
                 }
                 return true
             }
@@ -147,22 +154,30 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
+    private fun startFastForwardRamp() {
+        ffSkipMs = 5000L
+        ffRunnable = Runnable {
+            player.seekTo(player.currentPosition + ffSkipMs)
+            ffSkipMs += 5000L
+            handler.postDelayed(ffRunnable!!, 300)
+        }
+        handler.postDelayed(ffRunnable!!, 700)
+    }
+
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        handler.removeCallbacks(ffRunnable)
-        val down = keyDownTimes.remove(keyCode)
-        val held = down?.let { SystemClock.elapsedRealtime() - it } ?: 0L
-        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held >= 700) {
-            if (currentIndex < videoQueue.size - 1) playVideo(currentIndex + 1)
+        ffRunnable?.let { handler.removeCallbacks(it) }
+        val downTime = keyDownTimes.remove(keyCode) ?: 0L
+        val held = SystemClock.elapsedRealtime() - downTime
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held >= 700 && currentIndex < videoQueue.size - 1) {
+            playVideo(currentIndex + 1)
         }
         return super.onKeyUp(keyCode, event)
     }
 
-    private fun toast(msg: String) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-    }
+    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
+        ffRunnable?.let { handler.removeCallbacks(it) }
         player.release()
         super.onDestroy()
     }

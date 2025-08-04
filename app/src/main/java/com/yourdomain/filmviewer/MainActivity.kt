@@ -17,12 +17,6 @@ import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackParameters
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.PlayerView
-import com.google.android.exoplayer2.MediaSource
-import com.google.android.exoplayer2.source.ProgressiveMediaSource
-import com.google.android.exoplayer2.source.hls.HlsMediaSource
-import com.google.android.exoplayer2.upstream.DefaultDataSource
-import com.google.android.exoplayer2.MediaSourceFactory
-import com.google.android.exoplayer2.DefaultMediaSourceFactory
 
 class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
@@ -52,10 +46,8 @@ class MainActivity : AppCompatActivity() {
         playerView = findViewById(R.id.player_view)
         speedIndicator = findViewById(R.id.speedIndicator)
 
-        // Universal media‑source factory → plays MP4, HLS, DASH, etc.
-        val mediaSourceFactory: MediaSourceFactory = DefaultMediaSourceFactory(this)
+        // Builder with default media source factory (auto‑detects MP4 or HLS)
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .also { playerView.player = it }
 

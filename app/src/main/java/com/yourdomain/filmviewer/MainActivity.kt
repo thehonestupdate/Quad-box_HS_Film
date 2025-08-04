@@ -16,9 +16,13 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackParameters
 import com.google.android.exoplayer2.Player
-import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.ui.PlayerView
+import com.google.android.exoplayer2.MediaSource
+import com.google.android.exoplayer2.source.ProgressiveMediaSource
+import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.upstream.DefaultDataSource
+import com.google.android.exoplayer2.MediaSourceFactory
+import com.google.android.exoplayer2.DefaultMediaSourceFactory
 
 class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
@@ -32,10 +36,10 @@ class MainActivity : AppCompatActivity() {
     private var videoQueue = mutableListOf<String>()
     private var currentIndex = 0
 
-    private var keyDownTimes = mutableMapOf<Int, Long>()
     private val handler = Handler(Looper.getMainLooper())
     private var ffRunnable: Runnable? = null
-    private var ffSkipMs = 5000L
+    private var ffSkipMs = 5_000L
+    private val keyDownTimes = mutableMapOf<Int, Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,10 +52,13 @@ class MainActivity : AppCompatActivity() {
         playerView = findViewById(R.id.player_view)
         speedIndicator = findViewById(R.id.speedIndicator)
 
-        // Build ExoPlayer
-        player = ExoPlayer.Builder(this).build().also { playerView.player = it }
+        // Universal media‑source factory → plays MP4, HLS, DASH, etc.
+        val mediaSourceFactory: MediaSourceFactory = DefaultMediaSourceFactory(this)
+        player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .also { playerView.player = it }
 
-        // Listen for completion to auto‑advance
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED && currentIndex < videoQueue.size - 1) {
@@ -60,89 +67,75 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        // Handle deep‑link launch
-        intent.data?.getQueryParameter("q")?.let { parseQueueAndStart(it) }
+        // Deep‑link launch
+        intent.data?.getQueryParameter("q")?.let { parseAndStartQueue(it) }
 
-        // Manual start
+        // Manual launch
         startBtn.setOnClickListener {
             val base64 = linkBox.text.toString().substringAfter("?q=", "")
-            parseQueueAndStart(base64)
+            parseAndStartQueue(base64)
         }
     }
 
-    private fun parseQueueAndStart(base64: String) {
+    /** Decode base64 list → populate queue → start */
+    private fun parseAndStartQueue(base64: String) {
         try {
             val decoded = String(android.util.Base64.decode(base64, android.util.Base64.DEFAULT))
             val links = decoded.lines().filter { it.isNotBlank() }
-            if (links.isEmpty()) {
-                toast("Queue is empty")
-                return
-            }
+            if (links.isEmpty()) { toast("Queue empty"); return }
             videoQueue = links.toMutableList()
-            startPlayback()
+            linkEntry.visibility = View.GONE
+            playerView.visibility = View.VISIBLE
+            playVideo(0)
         } catch (e: Exception) {
             toast("Bad share link")
         }
     }
 
-    private fun startPlayback() {
-        linkEntry.visibility = View.GONE
-        playerView.visibility = View.VISIBLE
-        playbackSpeed = 1.0f
-        speedIndicator.visibility = View.GONE
-        playVideo(0)
-    }
-
+    /** Play by index – works for either MP4 or .m3u8 */
     private fun playVideo(index: Int) {
         currentIndex = index
         val uri = Uri.parse(videoQueue[index])
-
-        // Use Progressive source so seek map is created once moov atom is at head (faststart)
-        val dataSourceFactory = DefaultDataSource.Factory(this)
-        val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(uri))
-
-        player.setMediaSource(mediaSource)
+        player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()
         player.playWhenReady = true
         player.playbackParameters = PlaybackParameters(playbackSpeed)
     }
 
+    /* =====================   UI helpers   ===================== */
     private fun updateSpeedIndicator() {
-        if (playbackSpeed != 1.0f) {
-            speedIndicator.text = String.format("%.2fx", playbackSpeed)
-            speedIndicator.visibility = View.VISIBLE
-        } else {
-            speedIndicator.visibility = View.GONE
+        speedIndicator.apply {
+            text = String.format("%.2fx", playbackSpeed)
+            visibility = if (playbackSpeed == 1.0f) View.GONE else View.VISIBLE
         }
     }
 
+    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    /* =====================   Key handling   ===================== */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (!keyDownTimes.containsKey(keyCode)) keyDownTimes[keyCode] = SystemClock.elapsedRealtime()
-
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (event.repeatCount == 0) {
-                    player.seekTo(player.currentPosition + 5000L)
+                    player.seekTo(player.currentPosition + 5_000)
                     startFastForwardRamp()
                 }
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (event.repeatCount == 0) player.seekTo(player.currentPosition - 5000L)
+                if (event.repeatCount == 0) player.seekTo(player.currentPosition - 5_000)
                 return true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 playbackSpeed = (playbackSpeed + 0.25f).coerceAtMost(10.0f)
                 player.playbackParameters = PlaybackParameters(playbackSpeed)
-                updateSpeedIndicator()
-                return true
+                updateSpeedIndicator(); return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 playbackSpeed = (playbackSpeed - 0.25f).coerceAtLeast(0.25f)
                 player.playbackParameters = PlaybackParameters(playbackSpeed)
-                updateSpeedIndicator()
-                return true
+                updateSpeedIndicator(); return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 if (event.repeatCount == 0) {
@@ -155,10 +148,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startFastForwardRamp() {
-        ffSkipMs = 5000L
+        ffSkipMs = 5_000L
         ffRunnable = Runnable {
             player.seekTo(player.currentPosition + ffSkipMs)
-            ffSkipMs += 5000L
+            ffSkipMs += 5_000L
             handler.postDelayed(ffRunnable!!, 300)
         }
         handler.postDelayed(ffRunnable!!, 700)
@@ -166,16 +159,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         ffRunnable?.let { handler.removeCallbacks(it) }
-        val downTime = keyDownTimes.remove(keyCode) ?: 0L
-        val held = SystemClock.elapsedRealtime() - downTime
+        val down = keyDownTimes.remove(keyCode) ?: 0L
+        val held = SystemClock.elapsedRealtime() - down
         if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held >= 700 && currentIndex < videoQueue.size - 1) {
             playVideo(currentIndex + 1)
         }
         return super.onKeyUp(keyCode, event)
     }
 
-    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-
+    /* =====================   Lifecycle   ===================== */
     override fun onDestroy() {
         ffRunnable?.let { handler.removeCallbacks(it) }
         player.release()

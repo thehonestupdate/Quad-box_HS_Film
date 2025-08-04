@@ -12,15 +12,11 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.exoplayer2.C
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackParameters
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.PlayerView
-import com.google.android.exoplayer2.upstream.DefaultAllocator
-import com.google.android.exoplayer2.upstream.DefaultLoadControl
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
@@ -29,7 +25,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var linkBox: EditText
     private lateinit var startBtn: TextView
     private lateinit var speedIndicator: TextView
-    private lateinit var scrubIndicator: TextView
 
     private var playbackSpeed = 1.0f
     private var videoQueue = mutableListOf<String>()
@@ -37,7 +32,7 @@ class MainActivity : AppCompatActivity() {
 
     private var keyDownTimes = mutableMapOf<Int, Long>()
     private val handler = Handler(Looper.getMainLooper())
-    private var ffRunnable: Runnable? = null
+    private lateinit var ffRunnable: Runnable
     private var ffSkipMs = 5000L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,26 +44,11 @@ class MainActivity : AppCompatActivity() {
         startBtn = findViewById(R.id.startBtn)
         playerView = findViewById(R.id.player_view)
         speedIndicator = findViewById(R.id.speedIndicator)
-        scrubIndicator = findViewById(R.id.scrubIndicator)
 
-        // Improved buffering
-        val loadControl = DefaultLoadControl.Builder()
-            .setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE))
-            .setBufferDurationsMs(
-                100_000, // min buffer before play
-                300_000, // max buffer
-                5_000,   // buffer for playback after rebuffer
-                5_000    // buffer for playback after resume
-            )
-            .setTargetBufferBytes(-1)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
+        // Initialize ExoPlayer with default buffering
+        player = ExoPlayer.Builder(this).build().also { playerView.player = it }
 
-        player = ExoPlayer.Builder(this)
-            .setLoadControl(loadControl)
-            .build().also { playerView.player = it }
-
-        // Handle shareable q= links
+        // Handle shareable ?q= links
         intent.data?.getQueryParameter("q")?.let { code ->
             val decoded = String(android.util.Base64.decode(code, android.util.Base64.DEFAULT))
             val links = decoded.lines().filter { it.isNotBlank() }
@@ -106,7 +86,6 @@ class MainActivity : AppCompatActivity() {
         playerView.visibility = View.VISIBLE
         playbackSpeed = 1.0f
         speedIndicator.visibility = View.GONE
-        scrubIndicator.visibility = View.GONE
         playVideo(0)
     }
 
@@ -119,69 +98,43 @@ class MainActivity : AppCompatActivity() {
         player.playbackParameters = PlaybackParameters(playbackSpeed)
     }
 
-    private fun updateSpeed() {
+    private fun updateSpeedIndicator() {
         if (playbackSpeed != 1.0f) {
             speedIndicator.text = String.format("%.2fx", playbackSpeed)
             speedIndicator.visibility = View.VISIBLE
         } else speedIndicator.visibility = View.GONE
     }
 
-    private fun showScrubOverlay() {
-        val pos = player.currentPosition
-        val dur = player.duration
-        scrubIndicator.text = String.format(
-            "%s / %s",
-            formatTime(pos), formatTime(dur)
-        )
-        scrubIndicator.visibility = View.VISIBLE
-    }
-
-    private fun hideScrubOverlay() {
-        scrubIndicator.visibility = View.GONE
-    }
-
-    private fun formatTime(ms: Long): String {
-        val h = TimeUnit.MILLISECONDS.toHours(ms)
-        val m = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
-        val s = TimeUnit.MILLISECONDS.toSeconds(ms) % 60
-        return String.format("%02d:%02d:%02d", h, m, s)
-    }
-
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (!keyDownTimes.containsKey(keyCode)) keyDownTimes[keyCode] = SystemClock.elapsedRealtime()
-
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (event.repeatCount == 0) {
-                    player.seekTo(player.currentPosition + 5000)
-                    // start fast-forward routine
-                    ffSkipMs = 5000
-                    ffRunnable = object : Runnable {
-                        override fun run() {
-                            player.seekTo(player.currentPosition + ffSkipMs)
-                            ffSkipMs += 5000
-                            showScrubOverlay()
-                            handler.postDelayed(this, 300)
-                        }
+                    player.seekTo(player.currentPosition + 5000L)
+                    ffSkipMs = 5000L
+                    ffRunnable = Runnable {
+                        player.seekTo(player.currentPosition + ffSkipMs)
+                        ffSkipMs += 5000L
+                        handler.postDelayed(ffRunnable, 300)
                     }
-                    handler.postDelayed(ffRunnable!!, 700)
+                    handler.postDelayed(ffRunnable, 700)
                 }
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (event.repeatCount == 0) player.seekTo(player.currentPosition - 5000)
+                if (event.repeatCount == 0) player.seekTo(player.currentPosition - 5000L)
                 return true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 playbackSpeed = (playbackSpeed + 0.25f).coerceAtMost(10.0f)
                 player.playbackParameters = PlaybackParameters(playbackSpeed)
-                updateSpeed()
+                updateSpeedIndicator()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 playbackSpeed = (playbackSpeed - 0.25f).coerceAtLeast(0.25f)
                 player.playbackParameters = PlaybackParameters(playbackSpeed)
-                updateSpeed()
+                updateSpeedIndicator()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
@@ -196,15 +149,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         handler.removeCallbacks(ffRunnable)
-        hideScrubOverlay()
-
         val down = keyDownTimes.remove(keyCode)
         val held = down?.let { SystemClock.elapsedRealtime() - it } ?: 0L
-
-        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held < 700) {
-            // short tap already handled
-        } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            // long press skip to next video
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held >= 700) {
             if (currentIndex < videoQueue.size - 1) playVideo(currentIndex + 1)
         }
         return super.onKeyUp(keyCode, event)

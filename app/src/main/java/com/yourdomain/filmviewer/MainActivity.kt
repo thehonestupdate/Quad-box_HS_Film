@@ -141,7 +141,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
-                playbackSpeed = (playbackSpeed + 0.25f).coerceAtMost(4.0f)
+                playbackSpeed = (playbackSpeed + 0.25f).coerceAtMost(20.0f)
                 player.playbackParameters = player.playbackParameters.withSpeed(playbackSpeed)
                 updateSpeedIndicator()
                 return true

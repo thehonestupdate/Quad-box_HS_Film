@@ -1,4 +1,4 @@
-package com.yourdomain.Quad-box_HS_Film
+package com.yourdomain.filmviewer
 
 import android.content.Intent
 import android.net.Uri

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
-    package="com.yourdomain.filmviewer"
+    package="com.yourdomain.Quad-box_HS_Film"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- TV apps should not require a touchscreen; leanback launcher makes it visible on TV. -->

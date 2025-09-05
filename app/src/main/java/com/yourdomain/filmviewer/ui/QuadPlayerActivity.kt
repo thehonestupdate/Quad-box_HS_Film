@@ -79,9 +79,9 @@ class QuadPlayerActivity : AppCompatActivity() {
         val container = containerOf(index)
         container.removeAllViews()
         val pv = layoutInflater.inflate(R.layout.partial_player_view, container, false) as StyledPlayerView
-        container.addView(pv, ConstraintLayout.LayoutParams(
-            ConstraintLayout.LayoutParams.MATCH_PARENT,
-            ConstraintLayout.LayoutParams.MATCH_PARENT
+        container.addView(pv, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
         // Build player

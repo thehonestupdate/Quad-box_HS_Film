@@ -1,0 +1,51 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create/update a release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      # ^ Temurin is cached on hosted runners and is recommended. :contentReference[oaicite:1]{index=1}
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew clean :app:assembleDebug
+
+      - name: Upload build artifact (for CI logs only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuadBoxHSFilm-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+      # ^ Artifacts are handy but require login to download. :contentReference[oaicite:2]{index=2}
+
+      - name: Create/Update 'latest' GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          body: Auto-published debug build from CI
+          draft: false
+          prerelease: true
+          files: app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ^ This publishes a public Release asset you can download without logging in. :contentReference[oaicite:3]{index=3}

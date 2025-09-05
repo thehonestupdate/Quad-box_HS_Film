@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/quad_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Vertical split at 50% -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_v"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5" />
+
+    <!-- Horizontal split at 50% -->
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guideline_h"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.5" />
+
+    <!-- Top-left -->
+    <FrameLayout
+        android:id="@+id/tile0"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/guideline_v"
+        app:layout_constraintBottom_toTopOf="@id/guideline_h"/>
+
+    <!-- Top-right (AUDIO) -->
+    <FrameLayout
+        android:id="@+id/tile1"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="@id/guideline_v"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/guideline_h"/>
+
+    <!-- Bottom-left -->
+    <FrameLayout
+        android:id="@+id/tile2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/guideline_h"
+        app:layout_constraintEnd_toStartOf="@id/guideline_v"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+
+    <!-- Bottom-right -->
+    <FrameLayout
+        android:id="@+id/tile3"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toStartOf="@id/guideline_v"
+        app:layout_constraintTop_toBottomOf="@id/guideline_h"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

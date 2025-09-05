@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace "com.yourdomain.filmviewer"
+    namespace "com.yourdomain.Quad-box_HS_Film"
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.yourdomain.filmviewer"
+        applicationId "com.yourdomain.Quad-box_HS_Film"
         minSdk 23
         targetSdk 34
         versionCode 1

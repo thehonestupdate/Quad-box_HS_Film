@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest package="com.yourdomain.filmviewer"
+<manifest
+    package="com.yourdomain.filmviewer"
     xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- TV apps should not require a touchscreen; leanback launcher makes it visible on TV. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <uses-permission android:name="android.permission.INTERNET"/>
 
@@ -8,6 +13,8 @@
         android:label="FilmViewer"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+
+        <!-- Your existing single-view / home screen entry -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -16,14 +23,35 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+        </activity>
 
-            <!-- Optional: allow launching with a URL that has ?q=... -->
+        <!-- New: Quad 2x2 viewer screen -->
+        <activity
+            android:name=".ui.QuadPlayerActivity"
+            android:exported="true"
+            android:resizeableActivity="true">
+            <!-- Open via HTTPS deep link like:
+                 https://anydomain.com/quad?u1=...&u2=...&u3=...&u4=... -->
             <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Accept both https and http without pinning a host, but only when path starts with /quad -->
+                <data android:scheme="https" android:pathPrefix="/quad" />
+                <data android:scheme="http"  android:pathPrefix="/quad" />
+            </intent-filter>
+
+            <!-- Open via custom scheme like:
+                 filmviewer://quad?u1=...&u2=...&u3=...&u4=... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="filmviewer"
+                    android:host="quad" />
             </intent-filter>
         </activity>
+
     </application>
 </manifest>

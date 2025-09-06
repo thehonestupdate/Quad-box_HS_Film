@@ -27,7 +27,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build debug APK
-        run: ./gradlew clean :app:assembleDebug
+        run: gradle clean :app:assembleDebug
 
       - name: Upload build artifact (for CI logs only)
         uses: actions/upload-artifact@v4

@@ -3,11 +3,12 @@ package com.yourdomain.filmviewer.ui
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
-import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -18,7 +19,6 @@ import com.yourdomain.filmviewer.stream.StreamSource
 import com.yourdomain.filmviewer.util.AppLinkParser
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import androidx.media3.datasource.DefaultHttpDataSource
 
 class QuadPlayerActivity : AppCompatActivity() {
 
@@ -43,16 +43,12 @@ class QuadPlayerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_quad_player)
 
-        // Track selectors: cap background tiles, leave focus tile flexible
-        bgTrackSelector = DefaultTrackSelector(this).apply {
-            parameters = DefaultTrackSelector.Parameters.Builder(this@QuadPlayerActivity).build()
-            // For Media3, cap quality via player.trackSelectionParameters (below) after build
-        }
+        bgTrackSelector = DefaultTrackSelector(this)
         focusTrackSelector = DefaultTrackSelector(this)
 
         resolver = DefaultResolver(this)
 
-        val inputs = AppLinkParser.getQuadInputs(intent) // list of up to 4 strings
+        val inputs = AppLinkParser.getQuadInputs(intent)
         for (i in 0 until 4) {
             val raw = inputs.getOrNull(i)
             if (raw.isNullOrBlank()) continue
@@ -66,31 +62,28 @@ class QuadPlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun containerOf(index: Int): ViewGroup {
-        return findViewById(tileIds[index])
-    }
+    private fun containerOf(index: Int): ViewGroup = findViewById(tileIds[index])
 
     @SuppressLint("InflateParams")
     private fun attachExoToTile(index: Int, src: StreamSource.Hls) {
-        // Clean existing
         destroyTile(index)
 
-        // Inflate a StyledPlayerView
         val container = containerOf(index)
         container.removeAllViews()
         val pv = layoutInflater.inflate(R.layout.partial_player_view, container, false) as StyledPlayerView
-        container.addView(pv, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        container.addView(
+            pv,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
-        // Build player
         val trackSelector = if (index == 1) focusTrackSelector else bgTrackSelector
         val player = ExoPlayer.Builder(this)
             .setTrackSelector(trackSelector)
             .build()
 
-        // Cap background tiles: ~540p and ~2Mbps (Media3 way via TrackSelectionParameters)
         if (index != 1) {
             player.trackSelectionParameters = TrackSelectionParameters.Builder(this)
                 .setMaxVideoSize(960, 540)
@@ -99,7 +92,7 @@ class QuadPlayerActivity : AppCompatActivity() {
         }
 
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("FilmViewer/1.0")
+            .setUserAgent("QuadBoxHSFilm/1.0")
             .apply {
                 if (src.headers.isNotEmpty()) {
                     setDefaultRequestProperties(src.headers)
@@ -112,7 +105,6 @@ class QuadPlayerActivity : AppCompatActivity() {
         pv.player = player
         players[index] = player
 
-        // Audio policy: only top-right (index 1) has sound
         player.volume = if (index == 1) 1f else 0f
         player.setMediaSource(mediaSource)
         player.prepare()
@@ -125,10 +117,13 @@ class QuadPlayerActivity : AppCompatActivity() {
         val web = WebTileView(this)
         webTiles[index] = web
         container.removeAllViews()
-        container.addView(web, ConstraintLayout.LayoutParams(
-            ConstraintLayout.LayoutParams.MATCH_PARENT,
-            ConstraintLayout.LayoutParams.MATCH_PARENT
-        ))
+        container.addView(
+            web,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
         web.loadYouTube(videoId, startMuted)
     }
 
@@ -138,11 +133,13 @@ class QuadPlayerActivity : AppCompatActivity() {
         val web = WebTileView(this)
         webTiles[index] = web
         container.removeAllViews()
-        container.addView(web, ConstraintLayout.LayoutParams(
-            ConstraintLayout.LayoutParams.MATCH_PARENT,
-            ConstraintLayout.LayoutParams.MATCH_PARENT
-        ))
-        // For generic embeds, just load the URL. (Some providers handle autoplay only when muted)
+        container.addView(
+            web,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
         web.loadUrl(url, startMuted)
     }
 
@@ -156,7 +153,6 @@ class QuadPlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Release to be safe for TV memory constraints
         for (i in 0 until 4) {
             players[i]?.playWhenReady = false
         }

@@ -18,6 +18,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.StyledPlayerView
+import com.yourdomain.filmviewer.ui.QuadPlayerActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -41,23 +42,22 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // UI refs
         linkEntry = findViewById(R.id.linkEntry)
         linkBox = findViewById(R.id.linkBox)
         startBtn = findViewById(R.id.startBtn)
         playerView = findViewById(R.id.player_view)
         speedIndicator = findViewById(R.id.speedIndicator)
 
-        // If launched via deep link, route to Quad when appropriate BEFORE building single-player
+        // If launched via deep link for quad, route immediately
         intent.data?.let { data ->
             if (isQuadUri(data)) {
-                launchQuad(data)
+                startActivity(Intent(this, QuadPlayerActivity::class.java).setData(data))
                 finish()
                 return
             }
         }
 
-        // Build single-player ExoPlayer (Media3)
+        // Build single-player (Media3 ExoPlayer)
         player = ExoPlayer.Builder(this).build().also { p ->
             playerView.player = p
             p.addListener(object : Player.Listener {
@@ -69,19 +69,16 @@ class MainActivity : AppCompatActivity() {
             })
         }
 
-        // Deep-link (single queue) support: ?q=BASE64 or direct URL
+        // Deep-link for single: ?q=BASE64 or direct URL
         intent.data?.let { data ->
             val q = data.getQueryParameter("q")
             when {
                 q != null -> parseAndStartQueue(q)
-                data.scheme?.startsWith("http") == true -> {
-                    // Treat as a direct single URL
-                    startSingleFromUrl(data.toString())
-                }
+                data.scheme?.startsWith("http") == true -> startSingleFromUrl(data.toString())
             }
         }
 
-        // Manual launch from entry box
+        // Manual start from entry box
         startBtn.setOnClickListener {
             val raw = linkBox.text.toString().trim()
             if (raw.isEmpty()) {
@@ -91,28 +88,27 @@ class MainActivity : AppCompatActivity() {
 
             val maybe = runCatching { Uri.parse(raw) }.getOrNull()
             if (maybe != null && isQuadUri(maybe)) {
-                launchQuad(maybe)
+                startActivity(Intent(this, QuadPlayerActivity::class.java).setData(maybe))
                 return@setOnClickListener
             }
 
-            // If it's a builder link with ?q=..., use that. Otherwise treat as single/queue.
             val base64FromUrl = maybe?.getQueryParameter("q")
             if (!base64FromUrl.isNullOrBlank()) {
                 parseAndStartQueue(base64FromUrl)
             } else {
-                // raw could be a base64 blob (just the q value) or a direct media URL
                 parseAndStartQueue(raw)
             }
         }
     }
 
-    /** Detect quad URLs:
+    /** quad URLs:
      *  - filmviewer://quad?u1=...
+     *  - quadboxhsfilm://quad?u1=... (if you added the extra scheme)
      *  - https://any.host/quad?u1=...
      */
     private fun isQuadUri(uri: Uri): Boolean {
         val pathLooksQuad = uri.path?.startsWith("/quad") == true
-        val schemeHostQuad = (uri.scheme == "filmviewer" && uri.host == "quad")
+        val schemeHostQuad = (uri.host == "quad" && (uri.scheme == "filmviewer" || uri.scheme == "quadboxhsfilm"))
         val hasAnyU = uri.getQueryParameter("u1") != null ||
                 uri.getQueryParameter("u2") != null ||
                 uri.getQueryParameter("u3") != null ||
@@ -120,11 +116,6 @@ class MainActivity : AppCompatActivity() {
         return (schemeHostQuad || pathLooksQuad) && hasAnyU
     }
 
-    private fun launchQuad(uri: Uri) {
-        startActivity(Intent(this, ui.QuadPlayerActivity::class.java).setData(uri))
-    }
-
-    /** Decode base64 queue if possible; otherwise treat input as a single URL */
     private fun parseAndStartQueue(base64OrUrl: String) {
         val decoded = runCatching {
             val bytes = android.util.Base64.decode(base64OrUrl, android.util.Base64.DEFAULT)
@@ -157,7 +148,6 @@ class MainActivity : AppCompatActivity() {
         playVideo(0)
     }
 
-    /** Play by index – handles MP4 or HLS (.m3u8) */
     private fun playVideo(index: Int) {
         currentIndex = index
         val uri = Uri.parse(videoQueue[index])
@@ -169,7 +159,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /* =====================   UI helpers   ===================== */
     private fun updateSpeedIndicator() {
         speedIndicator.apply {
             text = String.format("%.2fx", playbackSpeed)
@@ -180,7 +169,6 @@ class MainActivity : AppCompatActivity() {
     private fun toast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
-    /* =====================   Key handling   ===================== */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (!keyDownTimes.containsKey(keyCode)) keyDownTimes[keyCode] = SystemClock.elapsedRealtime()
         when (keyCode) {
@@ -231,17 +219,3 @@ class MainActivity : AppCompatActivity() {
         ffRunnable?.let { handler.removeCallbacks(it) }
         val down = keyDownTimes.remove(keyCode) ?: 0L
         val held = SystemClock.elapsedRealtime() - down
-        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held >= 700 && currentIndex < videoQueue.size - 1) {
-            playVideo(currentIndex + 1)
-        }
-        return super.onKeyUp(keyCode, event)
-    }
-
-    /* =====================   Lifecycle   ===================== */
-    override fun onDestroy() {
-        ffRunnable?.let { handler.removeCallbacks(it) }
-        player?.release()
-        player = null
-        super.onDestroy()
-    }
-}

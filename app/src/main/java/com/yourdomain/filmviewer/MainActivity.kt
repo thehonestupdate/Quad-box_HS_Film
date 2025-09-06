@@ -58,16 +58,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Build single-player (Media3 ExoPlayer)
-        player = ExoPlayer.Builder(this).build().also { p ->
-            playerView.player = p
-            p.addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_ENDED && currentIndex < videoQueue.size - 1) {
-                        playVideo(currentIndex + 1)
-                    }
+        val exo = ExoPlayer.Builder(this).build()
+        playerView.player = exo
+        exo.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED && currentIndex < videoQueue.size - 1) {
+                    playVideo(currentIndex + 1)
                 }
-            })
-        }
+            }
+        })
+        player = exo
 
         // Deep-link for single: ?q=BASE64 or direct URL
         intent.data?.let { data ->
@@ -154,8 +154,9 @@ class MainActivity : AppCompatActivity() {
         player?.apply {
             setMediaItem(MediaItem.fromUri(uri))
             prepare()
-            playWhenReady = true
-            playbackParameters = PlaybackParameters(playbackSpeed)
+            // safe-call assignments must be wrapped:
+            this.playWhenReady = true
+            setPlaybackParameters(PlaybackParameters(playbackSpeed))
         }
     }
 
@@ -187,12 +188,12 @@ class MainActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
                 playbackSpeed = (playbackSpeed + 0.25f).coerceAtMost(10.0f)
-                player?.playbackParameters = PlaybackParameters(playbackSpeed)
+                player?.setPlaybackParameters(PlaybackParameters(playbackSpeed))
                 updateSpeedIndicator(); return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 playbackSpeed = (playbackSpeed - 0.25f).coerceAtLeast(0.25f)
-                player?.playbackParameters = PlaybackParameters(playbackSpeed)
+                player?.setPlaybackParameters(PlaybackParameters(playbackSpeed))
                 updateSpeedIndicator(); return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
@@ -219,3 +220,16 @@ class MainActivity : AppCompatActivity() {
         ffRunnable?.let { handler.removeCallbacks(it) }
         val down = keyDownTimes.remove(keyCode) ?: 0L
         val held = SystemClock.elapsedRealtime() - down
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && held >= 700 && currentIndex < videoQueue.size - 1) {
+            playVideo(currentIndex + 1)
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
+    override fun onDestroy() {
+        ffRunnable?.let { handler.removeCallbacks(it) }
+        player?.release()
+        player = null
+        super.onDestroy()
+    }
+}

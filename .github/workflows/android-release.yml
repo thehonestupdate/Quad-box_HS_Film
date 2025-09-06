@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to create/update a release
+  contents: write  # needed to create/update a release
 
 jobs:
   build:
@@ -19,22 +19,33 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-          cache: gradle
-      # ^ Temurin is cached on hosted runners and is recommended. :contentReference[oaicite:1]{index=1}
+          java-version: '17'
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      # Install Android SDK and required components (matches compileSdk/build-tools in your app)
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+
+      # Install Gradle (since the repo doesn't include ./gradlew)
+      - name: Install Gradle 8.7 (via SDKMAN)
+        run: |
+          curl -s "https://get.sdkman.io" | bash
+          source "$HOME/.sdkman/bin/sdkman-init.sh"
+          sdk install gradle 8.7
+          echo "$HOME/.sdkman/candidates/gradle/current/bin" >> $GITHUB_PATH
 
       - name: Build debug APK
-        run: gradle clean :app:assembleDebug
+        run: |
+          gradle --version
+          gradle clean :app:assembleDebug
 
-      - name: Upload build artifact (for CI logs only)
+      - name: Upload build artifact (optional)
         uses: actions/upload-artifact@v4
         with:
           name: QuadBoxHSFilm-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-      # ^ Artifacts are handy but require login to download. :contentReference[oaicite:2]{index=2}
 
       - name: Create/Update 'latest' GitHub Release with APK
         uses: softprops/action-gh-release@v2
@@ -48,4 +59,3 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # ^ This publishes a public Release asset you can download without logging in. :contentReference[oaicite:3]{index=3}

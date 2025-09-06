@@ -85,10 +85,12 @@ class QuadPlayerActivity : AppCompatActivity() {
             .build()
 
         if (index != 1) {
-            player.trackSelectionParameters = TrackSelectionParameters.Builder(this)
-                .setMaxVideoSize(960, 540)
-                .setMaxVideoBitrate(2_000_000)
-                .build()
+            player.setTrackSelectionParameters(
+                TrackSelectionParameters.Builder(this)
+                    .setMaxVideoSize(960, 540)
+                    .setMaxVideoBitrate(2_000_000)
+                    .build()
+            )
         }
 
         val httpFactory = DefaultHttpDataSource.Factory()
@@ -154,7 +156,7 @@ class QuadPlayerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         for (i in 0 until 4) {
-            players[i]?.playWhenReady = false
+            players[i]?.let { it.playWhenReady = false }
         }
     }
 

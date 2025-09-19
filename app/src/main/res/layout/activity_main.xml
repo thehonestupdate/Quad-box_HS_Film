@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Entry overlay -->
     <LinearLayout
         android:id="@+id/linkEntry"
         android:orientation="vertical"
@@ -38,8 +36,7 @@
             android:layout_marginTop="16dp"/>
     </LinearLayout>
 
-    <!-- Single-player view (hidden until started) -->
-    <androidx.media3.ui.StyledPlayerView
+    <androidx.media3.ui.PlayerView
         android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -48,7 +45,6 @@
         android:focusable="true"
         android:focusableInTouchMode="true" />
 
-    <!-- On-screen speed indicator (optional) -->
     <TextView
         android:id="@+id/speedIndicator"
         android:layout_width="wrap_content"

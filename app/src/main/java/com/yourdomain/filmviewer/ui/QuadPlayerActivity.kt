@@ -12,7 +12,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.ui.StyledPlayerView
+import androidx.media3.ui.PlayerView
 import com.yourdomain.filmviewer.R
 import com.yourdomain.filmviewer.stream.DefaultResolver
 import com.yourdomain.filmviewer.stream.StreamSource
@@ -22,18 +22,12 @@ import kotlinx.coroutines.launch
 
 class QuadPlayerActivity : AppCompatActivity() {
 
-    private val tileIds = intArrayOf(
-        R.id.tile0, // top-left
-        R.id.tile1, // top-right (AUDIO)
-        R.id.tile2, // bottom-left
-        R.id.tile3  // bottom-right
-    )
+    private val tileIds = intArrayOf(R.id.tile0, R.id.tile1, R.id.tile2, R.id.tile3)
 
     private val players = arrayOfNulls<ExoPlayer>(4)
     private val webTiles = arrayOfNulls<WebTileView>(4)
 
     private lateinit var resolver: DefaultResolver
-
     private lateinit var bgTrackSelector: DefaultTrackSelector
     private lateinit var focusTrackSelector: DefaultTrackSelector
 
@@ -45,13 +39,12 @@ class QuadPlayerActivity : AppCompatActivity() {
 
         bgTrackSelector = DefaultTrackSelector(this)
         focusTrackSelector = DefaultTrackSelector(this)
-
         resolver = DefaultResolver(this)
 
         val inputs = AppLinkParser.getQuadInputs(intent)
         for (i in 0 until 4) {
-            val raw = inputs.getOrNull(i)
-            if (raw.isNullOrBlank()) continue
+            val raw = inputs.getOrNull(i) ?: continue
+            if (raw.isBlank()) continue
             loadJobs += lifecycleScope.launch {
                 when (val src = resolver.resolve(raw)) {
                     is StreamSource.Hls -> attachExoToTile(i, src)
@@ -70,7 +63,7 @@ class QuadPlayerActivity : AppCompatActivity() {
 
         val container = containerOf(index)
         container.removeAllViews()
-        val pv = layoutInflater.inflate(R.layout.partial_player_view, container, false) as StyledPlayerView
+        val pv = layoutInflater.inflate(R.layout.partial_player_view, container, false) as PlayerView
         container.addView(
             pv,
             FrameLayout.LayoutParams(
@@ -95,11 +88,7 @@ class QuadPlayerActivity : AppCompatActivity() {
 
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("QuadBoxHSFilm/1.0")
-            .apply {
-                if (src.headers.isNotEmpty()) {
-                    setDefaultRequestProperties(src.headers)
-                }
-            }
+            .apply { if (src.headers.isNotEmpty()) setDefaultRequestProperties(src.headers) }
 
         val mediaSource = HlsMediaSource.Factory(httpFactory)
             .createMediaSource(MediaItem.fromUri(src.url))

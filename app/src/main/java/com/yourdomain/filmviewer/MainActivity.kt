@@ -17,13 +17,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.StyledPlayerView
+import androidx.media3.ui.PlayerView
 import com.yourdomain.filmviewer.ui.QuadPlayerActivity
 
 class MainActivity : AppCompatActivity() {
 
     private var player: ExoPlayer? = null
-    private lateinit var playerView: StyledPlayerView
+    private lateinit var playerView: PlayerView
     private lateinit var linkEntry: LinearLayout
     private lateinit var linkBox: EditText
     private lateinit var startBtn: TextView
@@ -48,16 +48,14 @@ class MainActivity : AppCompatActivity() {
         playerView = findViewById(R.id.player_view)
         speedIndicator = findViewById(R.id.speedIndicator)
 
-        // If launched via deep link for quad, route immediately
+        // Route quad deep links immediately
         intent.data?.let { data ->
             if (isQuadUri(data)) {
                 startActivity(Intent(this, QuadPlayerActivity::class.java).setData(data))
-                finish()
-                return
+                finish(); return
             }
         }
 
-        // Build single-player (Media3 ExoPlayer)
         val exo = ExoPlayer.Builder(this).build()
         playerView.player = exo
         exo.addListener(object : Player.Listener {
@@ -69,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         })
         player = exo
 
-        // Deep-link for single: ?q=BASE64 or direct URL
+        // Single deep link support
         intent.data?.let { data ->
             val q = data.getQueryParameter("q")
             when {
@@ -78,13 +76,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Manual start from entry box
         startBtn.setOnClickListener {
             val raw = linkBox.text.toString().trim()
-            if (raw.isEmpty()) {
-                toast("Paste a link")
-                return@setOnClickListener
-            }
+            if (raw.isEmpty()) { toast("Paste a link"); return@setOnClickListener }
 
             val maybe = runCatching { Uri.parse(raw) }.getOrNull()
             if (maybe != null && isQuadUri(maybe)) {
@@ -93,19 +87,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             val base64FromUrl = maybe?.getQueryParameter("q")
-            if (!base64FromUrl.isNullOrBlank()) {
-                parseAndStartQueue(base64FromUrl)
-            } else {
-                parseAndStartQueue(raw)
-            }
+            if (!base64FromUrl.isNullOrBlank()) parseAndStartQueue(base64FromUrl)
+            else parseAndStartQueue(raw)
         }
     }
 
-    /** quad URLs:
-     *  - filmviewer://quad?u1=...
-     *  - quadboxhsfilm://quad?u1=... (if you added the extra scheme)
-     *  - https://any.host/quad?u1=...
-     */
     private fun isQuadUri(uri: Uri): Boolean {
         val pathLooksQuad = uri.path?.startsWith("/quad") == true
         val schemeHostQuad = (uri.host == "quad" && (uri.scheme == "filmviewer" || uri.scheme == "quadboxhsfilm"))
@@ -130,10 +116,7 @@ class MainActivity : AppCompatActivity() {
             else -> emptyList()
         }
 
-        if (links.isEmpty()) {
-            toast("Bad or empty link")
-            return
-        }
+        if (links.isEmpty()) { toast("Bad or empty link"); return }
 
         videoQueue = links.toMutableList()
         linkEntry.visibility = View.GONE
@@ -154,7 +137,6 @@ class MainActivity : AppCompatActivity() {
         player?.apply {
             setMediaItem(MediaItem.fromUri(uri))
             prepare()
-            // safe-call assignments must be wrapped:
             this.playWhenReady = true
             setPlaybackParameters(PlaybackParameters(playbackSpeed))
         }
